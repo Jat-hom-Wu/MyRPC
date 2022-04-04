@@ -29,44 +29,59 @@ func main() {
 
 	// p1 := People{Name:"xiaoming",Age:18}
 	// interfaceLearning1(p1)
-	
+
 	// reflectLearning()
 	// t(1,2,"asdfa")
-	
+
+	var a interface{}
+	var b int = 2
+	a = b
+	r1,r2 := a.(float32)
+	fmt.Println(r1,r2)
+	fmt.Printf("%T\n", r2)
+	fmt.Printf("%T\n",r1)
 }
 
-func t(arr...interface{}){
-	if len(arr)==0{
+func t(arr ...interface{}) {
+	if len(arr) == 0 {
 		fmt.Println("no input")
 		return
-	}else{
-		for _,v := range arr{
+	} else {
+		for _, v := range arr {
 			fmt.Println(v)
 		}
 	}
 }
 
-func reflectLearning(){
-	var a  reflect.Value
+func reflectLearning() {
+	var a reflect.Value
 	p1 := People{
-		Name:"xiaoming",
-		Age:18,
+		Name: "xiaoming",
+		Age:  18,
 	}
-	
-	a = reflect.New(reflect.TypeOf(""))
-	b := a.Interface()
-	b = "asdfasdf"
-	fmt.Println(b)
-	fmt.Println(a.Kind())
-	c := a.Elem().String()
-	fmt.Printf("%v\n",b)
-	fmt.Println(c)
-	fmt.Printf("%T\n", c)
 
-	aa := reflect.ValueOf(p1)
-	fmt.Println(aa.Interface())
-	fmt.Printf("%T\n",aa.Interface())
-	fmt.Println(b)
+	a = reflect.New(reflect.TypeOf(p1))
+	b := a.Elem() //elem就是取地址
+	fmt.Printf("%v\n", a.Type())
+	fmt.Printf("%v\n", b.Type())
+	c := reflect.TypeOf(p1).Name()
+	fmt.Println(c)
+	fmt.Println(reflect.ValueOf(p1).Type().Name())
+	if a == b {
+		fmt.Println("equal")
+	}
+	// b := a.Interface()
+	// b = "asdfasdf"
+	// fmt.Println(b)
+	// fmt.Println(a.Kind())
+	// c := a.Elem().String()
+	// fmt.Printf("%v\n",b)
+	// fmt.Println(c)
+	// fmt.Printf("%T\n", c)
+	// aa := reflect.ValueOf(p1)
+	// fmt.Println(aa.Interface())
+	// fmt.Printf("%T\n",aa.Interface())
+	// fmt.Println(b)
 }
 
 func interfaceLearning1(e interface{}) {
@@ -208,4 +223,3 @@ func mapLearning() {
 	fmt.Println(re)
 	fmt.Printf("%T\n", re)
 }
-

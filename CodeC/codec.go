@@ -75,7 +75,7 @@ func (c *GobCodec) Write(header *Header, body interface{}) (err error){
 		return
 	}
 	if err = c.enc.Encode(body); err != nil{
-		fmt.Println("gob error encoding body:", body)
+		fmt.Println("gob error encoding body:", err)
 		return
 	}
 	return

@@ -87,20 +87,14 @@ func (c *Client) receive() {
 		h := CodeC.Header{}
 		err = c.cc.ReadHeader(&h)
 		if err != nil {
-			fmt.Println("client read header failed:", err)
+			fmt.Println("client read header failed and close:", err)
 			break
 		}
 		call := c.removeCall(h.Seq)
 		if call == nil {
 			//the call is not in servieceMap
 			//ignore the call
-			err = c.cc.ReadBody(nil)
-			//for debug
-			// if err == nil {
-			// 	fmt.Println("err == nil")
-			// 	fmt.Println(h.Seq)
-			// }
-			// fmt.Println("error:call is nil")
+			err = c.cc.ReadBody(nil) //输入为nil则返回值也为nil
 		} else if h.Error != "" {
 			call.Error = fmt.Errorf(h.Error)
 			err = c.cc.ReadBody(nil)
