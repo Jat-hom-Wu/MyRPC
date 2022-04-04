@@ -30,7 +30,20 @@ func main() {
 	// p1 := People{Name:"xiaoming",Age:18}
 	// interfaceLearning1(p1)
 	
-	reflectLearning()
+	// reflectLearning()
+	// t(1,2,"asdfa")
+	
+}
+
+func t(arr...interface{}){
+	if len(arr)==0{
+		fmt.Println("no input")
+		return
+	}else{
+		for _,v := range arr{
+			fmt.Println(v)
+		}
+	}
 }
 
 func reflectLearning(){
