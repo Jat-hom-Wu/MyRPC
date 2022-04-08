@@ -1,6 +1,7 @@
 package MyRpc
 
 import (
+	"time"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -14,6 +15,8 @@ import (
 	"sync"
 )
 
+var GlobalServerHandleTimeOut time.Duration
+
 type Server struct {
 	//没有用锁，用了一个sync.Map
 	serviceMap sync.Map
@@ -22,6 +25,8 @@ type Server struct {
 type Option struct {
 	MagicNumber int
 	CodecType   string
+	ClientCallTimeOut time.Duration
+	ClientDialTimeOut time.Duration
 }
 
 type request struct {
@@ -87,10 +92,35 @@ func (s *Server) sendResponse(cc CodeC.Codec, h *CodeC.Header, body interface{},
 
 func (s *Server) handleRequest(cc CodeC.Codec, req *request, sending *sync.Mutex, wg *sync.WaitGroup) {
 	defer wg.Done()
+	sent := make(chan struct{})
+	called := make(chan struct{})
 	// fmt.Println("handleReqeust:", req.header, req.argv.Elem())	//used to panic.The req.argv is not pointer,so Elem() panic
 	//Invoke method
-	req.serive.Call(req.mType, req.argv, req.reply)
-	s.sendResponse(cc, req.header, req.reply.Interface(), sending)
+	go func() {
+		err := req.serive.Call(req.mType, req.argv, req.reply)
+		called<-struct{}{}
+		//这里应该要异常处理的
+		if err != nil{
+			fmt.Println("server call method failed:",err)
+			s.sendResponse(cc, req.header, struct{}{}, sending)	//struct{}{} represent invailedrequset
+			sent<-struct{}{}
+			return
+		}
+		s.sendResponse(cc, req.header, req.reply.Interface(), sending)
+		sent<-struct{}{}
+	}()
+	if GlobalServerHandleTimeOut == 0{
+		<-called
+		<-sent
+		return
+	}
+	select{
+	case <-time.After(GlobalServerHandleTimeOut):
+		fmt.Println("server handle request timeout")
+		return
+	case <-called:
+		<-sent
+	}
 }
 
 var invalidRequest = struct{}{}

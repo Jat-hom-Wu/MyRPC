@@ -1,12 +1,14 @@
 package MyRpc
 
 import (
+	"time"
 	"Global/CodeC"
 	"encoding/json"
 	"fmt"
 	"net"
 	"sync"
 	"errors"
+	"context"
 )
 
 type Call struct {
@@ -55,11 +57,13 @@ func (client *Client) Close() error {
 	return client.cc.Close()
 }
 
-func ClientDial(addr string) *Client {
-	conn, errDial := net.Dial("tcp", addr)
+//for timeout
+type clientDialResult struct{err error}
+
+func ClientDial(addr string, t time.Duration) *Client {
+	conn, errDial := net.DialTimeout("tcp", addr, t)
 	if errDial != nil {
 		fmt.Println("rpc client dial failed:", errDial)
-		conn.Close()
 		return nil
 	}
 	//send option to server first
@@ -68,12 +72,23 @@ func ClientDial(addr string) *Client {
 		MagicNumber: MagicNumber,
 		CodecType:   CodeC.GobType,
 	}
+	ch := make(chan clientDialResult)
 	f := CodeC.NewCodecModeMap[opt.CodecType]
-	err := json.NewEncoder(conn).Encode(opt)
-	if err != nil {
-		fmt.Println("client encode opt failed:", err)
+	go func(opt *Option, connection net.Conn){
+		err := json.NewEncoder(connection).Encode(opt)
+		ch <- clientDialResult{err:err}
+	}(opt, conn)
+	select{
+	case <-time.After(t):
+		fmt.Println("client parse option timeout")
 		conn.Close()
 		return nil
+	case result := <-ch:
+		if result.err != nil {
+			fmt.Println("client encode opt failed:", result.err)
+			conn.Close()
+			return nil
+		}
 	}
 	cc := f(conn)
 	client := NewClient(cc, opt)
@@ -141,9 +156,16 @@ func (client *Client) TerminateCall(err error) {
 	}
 }
 
-func (c *Client) Call(serviceMethod string, argv interface{}, reply interface{}) error {
-	call := <-c.Go(serviceMethod, argv, reply, make(chan *Call, 1)).Done
-	return call.Error
+func (c *Client) Call(ctx context.Context, serviceMethod string, argv interface{}, reply interface{}) error {
+	call := c.Go(serviceMethod, argv, reply, make(chan *Call, 1))
+	select{
+	case <-ctx.Done():
+		c.removeCall(c.seq)
+		fmt.Println("client call timeout")
+		return errors.New("client: call failed:"+ctx.Err().Error())
+	case result := <-call.Done:
+		return result.Error
+	}
 }
 
 func (c *Client) Go(serviceMethod string, argv interface{}, reply interface{}, done chan *Call) *Call {

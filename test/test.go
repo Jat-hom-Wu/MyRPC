@@ -1,6 +1,7 @@
 package main
 
 import (
+	"time"
 	// "os"
 	"bytes"
 	"encoding/gob"
@@ -33,13 +34,23 @@ func main() {
 	// reflectLearning()
 	// t(1,2,"asdfa")
 
-	var a interface{}
-	var b int = 2
-	a = b
-	r1,r2 := a.(float32)
-	fmt.Println(r1,r2)
-	fmt.Printf("%T\n", r2)
-	fmt.Printf("%T\n",r1)
+	// var a interface{}
+	// var b int = 2
+	// a = b
+	// r1,r2 := a.(float32)
+	// fmt.Println(r1,r2)
+	// fmt.Printf("%T\n", r2)
+	// fmt.Printf("%T\n",r1)
+	goroutineLearning()
+}
+
+func goroutineLearning(){
+	go func(){
+		time.Sleep(2*time.Second)
+		fmt.Println("litttle goroutine")
+	}()
+	time.Sleep(3*time.Second)
+	fmt.Println("big goroutine")
 }
 
 func t(arr ...interface{}) {

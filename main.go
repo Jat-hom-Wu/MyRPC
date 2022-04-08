@@ -8,6 +8,7 @@ import (
 	"time"
 
 	// "encoding/json"
+	"context"
 	"log"
 	"sync"
 )
@@ -45,7 +46,12 @@ func main() {
 }
 
 func Day03() {
-	client := MyRpc.ClientDial("127.0.0.1:9527")
+	MyRpc.GlobalServerHandleTimeOut = 0 //测试reflect调用要3秒....默认timeout为0,即没有超时时间
+	client := MyRpc.ClientDial("127.0.0.1:9527", 2*time.Second)
+	if client == nil {
+		fmt.Println("client dial error and shutdown")
+		return
+	}
 	defer client.Close()
 	time.Sleep(time.Second)
 	var wg sync.WaitGroup
@@ -55,7 +61,7 @@ func Day03() {
 			defer wg.Done()
 			args := &Args{A: j, B: j * j}
 			var reply int
-			if err := client.Call("Foo.Sum", args, &reply); err != nil {
+			if err := client.Call(context.Background(), "Foo.Sum", args, &reply); err != nil {
 				log.Fatal("client call failed:", err) //打印并退出！ 搞了1个小时，吐了！
 			}
 			fmt.Printf("%d + %d = %d\n", args.A, args.B, reply)
