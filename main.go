@@ -4,6 +4,7 @@ import (
 	"net"
 	// "Global/CodeC"
 	"Global/MyRpc"
+	"Global/xclient"
 	"fmt"
 	"time"
 
@@ -39,13 +40,23 @@ func StartServerDay03() {
 	MyRpc.Accept(listener)
 }
 
+func startServerDay06(addrCh chan string) {
+	var foo Foo
+	l, _ := net.Listen("tcp", ":0")
+	server := MyRpc.NewServer()
+	_ = server.Register(&foo)
+	addrCh <- l.Addr().String()
+	server.Accept(l)
+}
+
 func main() {
-	fmt.Println("rpc test day03")
-	go StartServerDay03()
-	Day03()
+	// Day03()
+	day06()
 }
 
 func Day03() {
+	fmt.Println("rpc test day03")
+	go StartServerDay03()
 	MyRpc.GlobalServerHandleTimeOut = 0 //测试reflect调用要3秒....默认timeout为0,即没有超时时间
 	client := MyRpc.ClientDial("127.0.0.1:9527", 2*time.Second)
 	if client == nil {
@@ -55,7 +66,7 @@ func Day03() {
 	defer client.Close()
 	time.Sleep(time.Second)
 	var wg sync.WaitGroup
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 10; i++ {
 		wg.Add(1)
 		go func(j int) {
 			defer wg.Done()
@@ -71,61 +82,69 @@ func Day03() {
 	fmt.Println("close")
 }
 
-//day2
-// func main(){
-// 	fmt.Println("rpc test")
-// 	go StartServer()
-// 	client := MyRpc.ClientDial("127.0.0.1:9527")
-// 	defer client.Close()
-// 	time.Sleep(time.Second)
-// 	var wg sync.WaitGroup
-// 	for i := 0; i < 5; i++{
-// 		wg.Add(1)
-// 		go func(j int){
-// 			defer wg.Done()
-// 			args := fmt.Sprintf("geerpc req %d", j)
-// 			var reply string
-// 			if err := client.Call("sum.foo", args, &reply);err != nil{
-// 				fmt.Println("client call failed:",err)
-// 			}
-// 			fmt.Println("reply:",reply)
-// 		}(i)
-// 	}
-// 	wg.Wait()
-// 	fmt.Println("close")
-// }
+func day06() {
+	fmt.Println("rpc test day06")
+	ch1 := make(chan string)
+	ch2 := make(chan string)
+	go startServerDay06(ch1)
+	go startServerDay06(ch2)
+	addr1 := <-ch1
+	addr2 := <-ch2
+	time.Sleep(time.Second)
+	fmt.Println("wake up")
+	call(addr1,addr2)
+	call(addr1,addr2)
+	call(addr1,addr2)
+	boardcast(addr1,addr2)
 
-// func main(){
-// 	fmt.Println("server test")
-// 	go StartServer()
-// 	//client implemnet
-// 	client, err := net.Dial("tcp","127.0.0.1:9527")
-// 	if err != nil{
-// 		fmt.Println("client dial failed:",err)
-// 	}
-// 	defer func(){
-// 		_ = client.Close()
-// 	}()
+}
 
-// 	time.Sleep(time.Second)
-// 	clientOption := MyRpc.Option{
-// 		MagicNumber:MyRpc.MagicNumber,
-// 		CodecType:CodeC.GobType,
-// 	}
-// 	err = json.NewEncoder(client).Encode(clientOption)
-// 	if err != nil{
-// 		fmt.Println("client encode option failed:",err)
-// 	}
-// 	cc := CodeC.NewGobCodec(client)
-// 	for i := 0; i < 5; i++{
-// 		h := &CodeC.Header{
-// 			ServiceMethod:"Foo.Sum",
-// 			Seq : uint64(i),
-// 		}
-// 		cc.Write(h,fmt.Sprintf("geerpc req %d",h.Seq))
-// 		cc.ReadHeader(h)
-// 		var reply string
-// 		cc.ReadBody(&reply)
-// 		fmt.Println("reply:", reply)
-// 	}
-// }
+func call(addr1, addr2 string) {
+	d := xclient.NewMultiServerDiscovery([]string{addr1, addr2}) //默认均为tcp
+	xc := xclient.NewXClient(d, xclient.RoundRobinSelect, nil)	//option直接写定了
+	defer xc.Close()
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			var reply int
+			var err error
+			b := xclient.BoardCastFlag{
+				Ok:false,
+			}
+			ctx, _ := context.WithTimeout(context.Background(), 3 * time.Second)
+			err = xc.Call(ctx, "Foo.Sum",&Args{A: i, B: i * i}, &reply, 2*time.Second, b)
+			if err != nil{
+				// log.Fatal("client call failed:", err)
+				fmt.Println("client call error",err)
+			}else{
+				fmt.Printf("%s %s success: %d + %d = %d\n", "call", "Foo.Sum", i, i * i, reply)
+			}
+		}(i)
+	}
+	wg.Wait()
+}
+
+func boardcast(addr1,addr2 string){
+	d := xclient.NewMultiServerDiscovery([]string{addr1, addr2}) //默认均为tcp
+	xc := xclient.NewXClient(d, xclient.RoundRobinSelect, nil)	//option直接写定了
+	defer xc.Close()
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			var reply int
+			var err error
+			ctx, _ := context.WithTimeout(context.Background(), 3 * time.Second)
+			err = xc.BoardCast(ctx, "Foo.Sum",&Args{A: i, B: i * i}, &reply, 2*time.Second)
+			if err != nil{
+				fmt.Printf(" %s error: %v\n", "Foo.Sum", err)
+			}else{
+				fmt.Printf("boardcast,%s %s success: %d + %d = %d\n", "call", "Foo.Sum", i, i * i, reply)
+			}
+		}(i)
+	}
+	wg.Wait()
+}

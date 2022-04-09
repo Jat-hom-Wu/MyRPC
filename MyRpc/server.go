@@ -74,8 +74,10 @@ func (s *Server) ServeOption(conn net.Conn) {
 func (s *Server) readHeader(cc CodeC.Codec) (*CodeC.Header, error) {
 	var h CodeC.Header
 	err := cc.ReadHeader(&h)
-	if err != nil && err != io.EOF {
-		fmt.Println("server read header failed,", err)
+	if err != nil {
+		if err != io.EOF{
+			fmt.Println("server read header error:",err)
+		}
 		return nil, err
 	}
 	return &h, err
@@ -134,6 +136,7 @@ func (s *Server) ServeMesage(codec CodeC.Codec) {
 		//error handle
 		if err != nil{
 			//should send error to client here
+			fmt.Println("server readheader failed and break")
 			break
 		}
 		//decode body
@@ -215,3 +218,7 @@ func Accept(listener net.Listener) error {
 }
 
 func Register(rcvr interface{}) error { return defaultServer.Register(rcvr) }
+
+func NewServer() *Server {
+	return &Server{}
+}

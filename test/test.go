@@ -9,6 +9,7 @@ import (
 	"io"
 	"reflect"
 	"strings"
+	"math/rand"
 )
 
 func main() {
@@ -41,7 +42,33 @@ func main() {
 	// fmt.Println(r1,r2)
 	// fmt.Printf("%T\n", r2)
 	// fmt.Printf("%T\n",r1)
-	goroutineLearning()
+	// goroutineLearning()
+	// randLearning()
+	slieceLearning()
+}
+
+func slieceLearning(){
+	s := make([]int, 0)
+	s = append(s,2)
+	s = append(s,3)
+	s2 := make([]int, 0)
+	s2 = make([]int,len(s))
+	copy(s2,s)
+	for key,value := range s2{
+		fmt.Println(key,value)
+	}
+
+	s3 := make(map[int]string)
+	s3[1] = "xiaoming"
+	value,ok := s3[3]
+	fmt.Println(value,ok)
+}
+
+func randLearning(){
+	s1 := rand.Int()
+	fmt.Println(s1)
+	s2 := rand.New(rand.NewSource(time.Now().UnixNano()))
+	fmt.Println(s2.Int())
 }
 
 func goroutineLearning(){

@@ -57,6 +57,12 @@ func (client *Client) Close() error {
 	return client.cc.Close()
 }
 
+func (client *Client) IsAvailable() bool {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	return !client.shutdowm && !client.closing
+}
+
 //for timeout
 type clientDialResult struct{err error}
 
@@ -128,6 +134,9 @@ func (c *Client) receive() {
 func (c *Client) registerCall(call *Call) (uint64, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.closing || c.shutdowm {
+		return 0, ErrShutdown
+	}
 	call.Seq = c.seq
 	c.serviceMap[call.Seq] = call
 	// fmt.Println("register,",call.Seq)
