@@ -2,8 +2,10 @@ package main
 
 import (
 	"net"
+	"net/http"
 	// "Global/CodeC"
 	"Global/MyRpc"
+	"Global/registry"
 	"Global/xclient"
 	"fmt"
 	"time"
@@ -49,9 +51,28 @@ func startServerDay06(addrCh chan string) {
 	server.Accept(l)
 }
 
+func startServerDay07(addrCh chan string,registryAddr string) {
+	var foo Foo
+	l, _ := net.Listen("tcp", ":0")
+	server := MyRpc.NewServer()
+	addrCh <- l.Addr().String()
+	_ = server.Register(&foo)
+	fmt.Println("start server addr:","tcp@"+l.Addr().String())
+	registry.HeartBeat(registryAddr, "tcp@"+l.Addr().String(), 0)
+	server.Accept(l)
+}
+
+func startRegistry(wg *sync.WaitGroup) {
+	l, _ := net.Listen("tcp", ":9999")
+	registry.HandleHTTP()
+	wg.Done()
+	_ = http.Serve(l, nil)
+}
+
 func main() {
 	// Day03()
-	day06()
+	// day06()
+	day07()
 }
 
 func Day03() {
@@ -92,16 +113,34 @@ func day06() {
 	addr2 := <-ch2
 	time.Sleep(time.Second)
 	fmt.Println("wake up")
-	call(addr1,addr2)
-	call(addr1,addr2)
-	call(addr1,addr2)
-	boardcast(addr1,addr2)
+	call(addr1, addr2)
+	call(addr1, addr2)
+	call(addr1, addr2)
+	boardcast(addr1, addr2)
+}
 
+func day07() {
+	fmt.Println("rpc test day07")
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go startRegistry(&wg)
+	wg.Wait()
+	registryAddr := "http://127.0.0.1:9999/myrpc/register"
+	ch1 := make(chan string)
+	ch2 := make(chan string)
+	go startServerDay07(ch1, registryAddr)
+	go startServerDay07(ch2, registryAddr)
+	<-ch1
+	<-ch2
+	time.Sleep(time.Second)
+	call07()
+	time.Sleep(time.Second)
+	boardcast07()
 }
 
 func call(addr1, addr2 string) {
-	d := xclient.NewMultiServerDiscovery([]string{addr1, addr2}) //默认均为tcp
-	xc := xclient.NewXClient(d, xclient.RoundRobinSelect, nil)	//option直接写定了
+	d := xclient.NewMultiServerDiscovery([]string{addr1, addr2}) //默认均为tcp //day06
+	xc := xclient.NewXClient(d, xclient.RoundRobinSelect, nil)   //option直接写定了
 	defer xc.Close()
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
@@ -111,24 +150,24 @@ func call(addr1, addr2 string) {
 			var reply int
 			var err error
 			b := xclient.BoardCastFlag{
-				Ok:false,
+				Ok: false,
 			}
-			ctx, _ := context.WithTimeout(context.Background(), 3 * time.Second)
-			err = xc.Call(ctx, "Foo.Sum",&Args{A: i, B: i * i}, &reply, 2*time.Second, b)
-			if err != nil{
+			ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)
+			err = xc.Call(ctx, "Foo.Sum", &Args{A: i, B: i * i}, &reply, 2*time.Second, b)
+			if err != nil {
 				// log.Fatal("client call failed:", err)
-				fmt.Println("client call error",err)
-			}else{
-				fmt.Printf("%s %s success: %d + %d = %d\n", "call", "Foo.Sum", i, i * i, reply)
+				fmt.Println("client call error", err)
+			} else {
+				fmt.Printf("%s %s success: %d + %d = %d\n", "call", "Foo.Sum", i, i*i, reply)
 			}
 		}(i)
 	}
 	wg.Wait()
 }
 
-func boardcast(addr1,addr2 string){
-	d := xclient.NewMultiServerDiscovery([]string{addr1, addr2}) //默认均为tcp
-	xc := xclient.NewXClient(d, xclient.RoundRobinSelect, nil)	//option直接写定了
+func call07() {
+	d := xclient.NewRegisterDiscovery("http://127.0.0.1:9999/myrpc/register",0)
+	xc := xclient.NewXClient(d, xclient.RoundRobinSelect, nil)   //option直接写定了
 	defer xc.Close()
 	var wg sync.WaitGroup
 	for i := 0; i < 5; i++ {
@@ -137,14 +176,65 @@ func boardcast(addr1,addr2 string){
 			defer wg.Done()
 			var reply int
 			var err error
-			ctx, _ := context.WithTimeout(context.Background(), 3 * time.Second)
-			err = xc.BoardCast(ctx, "Foo.Sum",&Args{A: i, B: i * i}, &reply, 2*time.Second)
-			if err != nil{
-				fmt.Printf(" %s error: %v\n", "Foo.Sum", err)
-			}else{
-				fmt.Printf("boardcast,%s %s success: %d + %d = %d\n", "call", "Foo.Sum", i, i * i, reply)
+			b := xclient.BoardCastFlag{
+				Ok: false,
+			}
+			ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)
+			err = xc.Call(ctx, "Foo.Sum", &Args{A: i, B: i * i}, &reply, 2*time.Second, b)
+			if err != nil {
+				// log.Fatal("client call failed:", err)
+				fmt.Println("client call error", err)
+			} else {
+				fmt.Printf("%s %s success: %d + %d = %d\n", "call", "Foo.Sum", i, i*i, reply)
 			}
 		}(i)
 	}
 	wg.Wait()
 }
+
+func boardcast(addr1, addr2 string) {
+	d := xclient.NewMultiServerDiscovery([]string{addr1, addr2}) //默认均为tcp
+	xc := xclient.NewXClient(d, xclient.RoundRobinSelect, nil)   //option直接写定了
+	defer xc.Close()
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			var reply int
+			var err error
+			ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)
+			err = xc.BoardCast(ctx, "Foo.Sum", &Args{A: i, B: i * i}, &reply, 2*time.Second)
+			if err != nil {
+				fmt.Printf(" %s error: %v\n", "Foo.Sum", err)
+			} else {
+				fmt.Printf("boardcast,%s %s success: %d + %d = %d\n", "call", "Foo.Sum", i, i*i, reply)
+			}
+		}(i)
+	}
+	wg.Wait()
+}
+
+func boardcast07() {
+	d := xclient.NewRegisterDiscovery("http://127.0.0.1:9999/myrpc/register",0)
+	xc := xclient.NewXClient(d, xclient.RoundRobinSelect, nil)   //option直接写定了
+	defer xc.Close()
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			var reply int
+			var err error
+			ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)
+			err = xc.BoardCast(ctx, "Foo.Sum", &Args{A: i, B: i * i}, &reply, 2*time.Second)
+			if err != nil {
+				fmt.Printf(" %s error: %v\n", "Foo.Sum", err)
+			} else {
+				fmt.Printf("boardcast,%s %s success: %d + %d = %d\n", "call", "Foo.Sum", i, i*i, reply)
+			}
+		}(i)
+	}
+	wg.Wait()
+}
+
